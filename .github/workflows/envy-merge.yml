@@ -10,13 +10,63 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
+  setup:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+        components: clippy, rustfmt
+
+    - name: Cache dependencies
+      uses: Swatinem/rust-cache@v2
+
+  build:
+    runs-on: ubuntu-latest
+    needs: setup
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
     - name: Build
-      run: cargo build --verbose
+      run: cargo build --release --verbose
+
+  lint:
+    runs-on: ubuntu-latest
+    needs: setup
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Run Clippy (Linting - Warnings Only)
+      run: cargo clippy || echo "Clippy found warnings, but continuing build."
+
+  format:
+    runs-on: ubuntu-latest
+    needs: setup
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Check Formatting (Non-blocking)
+      run: cargo fmt -- --check || echo "Rustfmt found issues, but continuing build."
+
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
     - name: Run tests
       run: cargo test --verbose
