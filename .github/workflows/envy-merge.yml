@@ -71,7 +71,7 @@ jobs:
       run: cargo build --release --target=${{ matrix.target }}
 
     - name: Upload binaries
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: envy-merge-${{ matrix.target }}
         path: target/${{ matrix.target }}/release/envy-merge*
@@ -114,7 +114,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download built binaries
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: binaries
 
