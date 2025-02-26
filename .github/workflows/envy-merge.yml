@@ -12,61 +12,21 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  setup:
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Set up Rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        override: true
-        components: clippy, rustfmt
-
-    - name: Install dependencies
-      run: sudo apt update && sudo apt install -y mingw-w64 clang cmake llvm cctools
-
-    - name: Ensure Cargo.lock exists
-      run: cargo generate-lockfile || true
-
-    - name: Cache Cargo dependencies
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: rust-cache-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          rust-cache-${{ runner.os }}-
-
-    - name: Fetch dependencies
-      run: cargo fetch
-
   build:
     strategy:
       matrix:
         target:
           - x86_64-unknown-linux-gnu    # Linux
-          - x86_64-apple-darwin         # macOS Intel
-          - aarch64-apple-darwin        # macOS Apple Silicon
-          - x86_64-pc-windows-gnu       # Windows MinGW
+          - x86_64-apple-darwin         # macOS Intel (Local Runner)
+          - aarch64-apple-darwin        # macOS Apple Silicon (Local Runner)
+          - x86_64-pc-windows-gnu       # Windows (Local Runner)
 
         include:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
 
-          - target: x86_64-apple-darwin
-            os: ubuntu-latest  # Cross-compiling macOS on Linux
-
           - target: aarch64-apple-darwin
-            os: ubuntu-latest  # Cross-compiling macOS on Linux
-
-          - target: x86_64-pc-windows-gnu
-            os: ubuntu-latest  # Cross-compiling Windows on Linux
+            os: self-hosted-macos
 
     runs-on: ${{ matrix.os }}
 
@@ -80,22 +40,9 @@ jobs:
         toolchain: stable
         target: ${{ matrix.target }}
 
-    # Install macOS cross-compilation tools (osxcross + cctools)
-    - name: Install macOS Cross-Compiler (osxcross)
-      if: matrix.target == 'x86_64-apple-darwin' || matrix.target == 'aarch64-apple-darwin'
-      run: |
-        rustup target add ${{ matrix.target }}
-
-        # Set the linker for Rust
-        export CC=o64-clang
-        export CXX=o64-clang++
-        export CARGO_TARGET_${{ matrix.target }}_LINKER=o64-clang
-
-    # Install Windows cross-compilation tools (MinGW)
-    - name: Install Windows Cross-Compiler (MinGW)
-      if: matrix.target == 'x86_64-pc-windows-gnu'
-      run: |
-        rustup target add x86_64-pc-windows-gnu
+    - name: Install Dependencies (Linux only)
+      if: matrix.os == 'ubuntu-latest'
+      run: sudo apt update && sudo apt install -y clang llvm cmake
 
     - name: Build
       run: cargo build --release --target=${{ matrix.target }}
@@ -105,53 +52,3 @@ jobs:
       with:
         name: envy-merge-${{ matrix.target }}
         path: target/${{ matrix.target }}/release/envy-merge*
-
-  lint:
-    runs-on: ubuntu-latest
-    needs: setup
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Run Clippy (Linting - Warnings Only)
-      run: cargo clippy || echo "Clippy found warnings, but continuing build."
-
-  format:
-    runs-on: ubuntu-latest
-    needs: setup
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Check Formatting (Non-blocking)
-      run: cargo fmt -- --check || echo "Rustfmt found issues, but continuing build."
-
-  test:
-    runs-on: ubuntu-latest
-    needs: build
-
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Run tests
-      run: cargo test --verbose
-
-  release:
-    needs: [build, lint, format, test]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download built binaries
-        uses: actions/download-artifact@v4
-        with:
-          path: binaries
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: binaries/**
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
