@@ -28,8 +28,9 @@ jobs:
       uses: actions/cache@v3
       with:
         path: |
-          ~/.cargo/registry
-          ~/.cargo/git
+          ~/.cargo/registry/index
+          ~/.cargo/registry/cache
+          ~/.cargo/git/db
           target
         key: rust-cache-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
         restore-keys: |
@@ -42,6 +43,17 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+
+    - name: Restore Cargo registry cache
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry/index
+          ~/.cargo/registry/cache
+          ~/.cargo/git/db
+        key: rust-cache-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          rust-cache-${{ runner.os }}-
 
     - name: Build
       run: cargo build --release --verbose
