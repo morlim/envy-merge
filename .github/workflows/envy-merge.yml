@@ -5,6 +5,8 @@ on:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
+    tags:
+      - "v*"
 
 env:
   CARGO_TERM_COLOR: always
@@ -23,6 +25,9 @@ jobs:
         toolchain: stable
         override: true
         components: clippy, rustfmt
+
+    - name: Install dependencies
+      run: sudo apt update && sudo apt install -y mingw-w64 clang cmake
 
     - name: Ensure Cargo.lock exists
       run: cargo generate-lockfile || true
@@ -44,24 +49,32 @@ jobs:
   build:
     runs-on: ubuntu-latest
     needs: setup
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu    # Linux
+          - x86_64-apple-darwin         # macOS Intel
+          - aarch64-apple-darwin        # macOS Apple Silicon
+          - x86_64-pc-windows-gnu       # Windows MinGW
 
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Restore Cargo dependencies cache
-      uses: actions/cache@v3
+    - name: Set up Rust
+      uses: actions-rs/toolchain@v1
       with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: rust-cache-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          rust-cache-${{ runner.os }}-
+        toolchain: stable
+        target: ${{ matrix.target }}
 
     - name: Build
-      run: cargo build --release --verbose
+      run: cargo build --release --target=${{ matrix.target }}
+
+    - name: Upload binaries
+      uses: actions/upload-artifact@v3
+      with:
+        name: envy-merge-${{ matrix.target }}
+        path: target/${{ matrix.target }}/release/envy-merge*
 
   lint:
     runs-on: ubuntu-latest
@@ -95,3 +108,20 @@ jobs:
 
     - name: Run tests
       run: cargo test --verbose
+
+  release:
+    needs: [build, lint, format, test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download built binaries
+        uses: actions/download-artifact@v3
+        with:
+          path: binaries
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: binaries/**
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
