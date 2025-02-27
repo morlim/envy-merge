@@ -111,6 +111,9 @@ jobs:
       with:
         path: binaries
 
+    - name: List downloaded binaries
+      run: ls -R binaries
+
     - name: Fix macOS binary permissions before release
       run: chmod +x binaries/envy-merge-aarch64-apple-darwin || true
 
